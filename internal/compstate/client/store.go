@@ -26,7 +26,7 @@ func (c *Store) SetState(ctx context.Context, input *api.SetStateInput) (output 
 	return
 }
 
-func (c *Store) GetState(ctx context.Context, input *api.GetStateInput) (output *api.GetStateOutput, err error) {
-	err = c.client.Invoke(ctx, "get-state", input, &output)
+func (c *Store) GetStates(ctx context.Context, input *api.GetStatesInput) (output *api.GetStatesOutput, err error) {
+	err = c.client.Invoke(ctx, "get-states", input, &output)
 	return
 }

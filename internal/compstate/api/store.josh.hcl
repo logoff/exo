@@ -9,10 +9,18 @@ interface "store" {
     output "version" "int" {}
   }
   
-  method "get-state" {
+  method "get-states" {
     input "component-id" "string" {}
+    input "version" "int" {
+      doc = "If not specified, begins history with most recent."
+    }
+    input "history" "int" {
+      doc = "Limit of historical states to return per component. Defaults to 1."
+    }
     
-    output "state" "*State" {}
+    output "states" "[]State" {
+      doc = "With descending version numbers."
+    }
   }
   
   // TODO: describe-components?

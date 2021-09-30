@@ -11,7 +11,7 @@ import (
 
 type Store interface {
 	SetState(context.Context, *SetStateInput) (*SetStateOutput, error)
-	GetState(context.Context, *GetStateInput) (*GetStateOutput, error)
+	GetStates(context.Context, *GetStatesInput) (*GetStatesOutput, error)
 }
 
 type SetStateInput struct {
@@ -26,20 +26,26 @@ type SetStateOutput struct {
 	Version int `json:"version"`
 }
 
-type GetStateInput struct {
+type GetStatesInput struct {
 	ComponentID string `json:"componentId"`
+	// If not specified, begins history with most recent.
+	Version int `json:"version"`
+	// Limit of historical states to return per component. Defaults to 1.
+	History int `json:"history"`
 }
 
-type GetStateOutput struct {
-	State *State `json:"state"`
+type GetStatesOutput struct {
+
+	// With descending version numbers.
+	States []State `json:"states"`
 }
 
 func BuildStoreMux(b *josh.MuxBuilder, factory func(req *http.Request) Store) {
 	b.AddMethod("set-state", func(req *http.Request) interface{} {
 		return factory(req).SetState
 	})
-	b.AddMethod("get-state", func(req *http.Request) interface{} {
-		return factory(req).GetState
+	b.AddMethod("get-states", func(req *http.Request) interface{} {
+		return factory(req).GetStates
 	})
 }
 

@@ -2,12 +2,12 @@ package sqlite
 
 import (
 	"context"
-	"database/sql"
-	"errors"
 	"fmt"
+	"math"
 
 	"github.com/deref/exo/internal/compstate/api"
 	"github.com/deref/exo/internal/util/jsonutil"
+	"github.com/deref/exo/internal/util/mathutil"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -54,8 +54,13 @@ func (sto *Store) SetState(ctx context.Context, input *api.SetStateInput) (*api.
 	return &output, nil
 }
 
-func (sto *Store) GetState(ctx context.Context, input *api.GetStateInput) (*api.GetStateOutput, error) {
-	row := sto.DB.QueryRowContext(ctx, `
+func (sto *Store) GetStates(ctx context.Context, input *api.GetStatesInput) (*api.GetStatesOutput, error) {
+	limit := mathutil.IntClamp(input.History, 1, 10)
+	maxVersion := int(math.MaxInt32)
+	if input.Version > 0 {
+		maxVersion = input.Version
+	}
+	rows, err := sto.DB.QueryContext(ctx, `
 		SELECT
 			component_id,
 			version,
@@ -65,24 +70,31 @@ func (sto *Store) GetState(ctx context.Context, input *api.GetStateInput) (*api.
 			timestamp
 		FROM component_state
 		WHERE component_id = ?
-		AND version = (
-			SELECT MAX(version)
-			FROM component_state
-			WHERE component_id = ?
-		)`, input.ComponentID, input.ComponentID)
-	var output api.GetStateOutput
-	var state api.State
-	var tags string
-	err := row.Scan(&state.ComponentID, &state.Version, &state.Type, &state.Content, &tags, &state.Timestamp)
+		AND version <= ?
+		ORDER BY version DESC
+		LIMIT ?
+		`,
+		input.ComponentID, maxVersion, limit)
 	if err != nil {
-		if !errors.Is(err, sql.ErrNoRows) {
+		return nil, err
+	}
+	defer rows.Close()
+	output := api.GetStatesOutput{
+		States: make([]api.State, 0, limit),
+	}
+	for rows.Next() {
+		var state api.State
+		var tags string
+		if err := rows.Scan(&state.ComponentID, &state.Version, &state.Type, &state.Content, &tags, &state.Timestamp); err != nil {
 			return nil, err
 		}
-	} else {
 		if err := jsonutil.UnmarshalString(tags, &state.Tags); err != nil {
-			return nil, fmt.Errorf("unmarshalling tags: %w", err)
+			return nil, fmt.Errorf("unmarshalling state version %d tags: %w", state.Version, err)
 		}
-		output.State = &state
+		output.States = append(output.States, state)
+	}
+	if rows.Err() != nil {
+		return nil, rows.Err()
 	}
 	return &output, nil
 }
